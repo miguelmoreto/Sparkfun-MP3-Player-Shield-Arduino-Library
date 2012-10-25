@@ -16,7 +16,8 @@
 *
 ***************************************/
 
-#include <SPI.h>
+ #include <PinChangeInt.h>
+ #include <SPI.h>
 
 //Add the SdFat Libraries
 #include <SdFat.h>
