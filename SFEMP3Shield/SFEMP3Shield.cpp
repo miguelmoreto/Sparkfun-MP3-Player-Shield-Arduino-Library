@@ -1,7 +1,7 @@
-        #ifndef PinChangeInt_h
-        #define LIBCALL_PINCHANGEINT
-        #include "../PinChangeInt/PinChangeInt.h"
-        #endif
+#ifndef PinChangeInt_h
+#define LIBCALL_PINCHANGEINT
+#include "../PinChangeInt/PinChangeInt.h"
+#endif
 
 #include "SFEMP3Shield.h"
 // inslude the SPI library:
@@ -203,7 +203,7 @@ uint8_t SFEMP3Shield::playMP3(char* fileName){
 	refill();
 	  
 	//attach refill interrupt off DREQ line, pin 2
-	PCintPort::attachInterrupt(MP3_DREQINT, refill, RISING); 
+	PCintPort::attachInterrupt(MP3_DREQ, &refill, RISING); 
 	  
 	return 0;
 }
@@ -215,7 +215,7 @@ void SFEMP3Shield::stopTrack(){
 		return;
   
 	//cancel external interrupt
-	PCintPort::detachInterrupt(MP3_DREQINT);
+	PCintPort::detachInterrupt(MP3_DREQ);
 	playing=FALSE;
 
 	//tell MP3 chip to do a soft reset. Fixes garbles at end, and clears its buffer. 
@@ -279,7 +279,7 @@ void SFEMP3Shield::pauseDataStream(){
 
 	//cancel external interrupt
 	if(playing)
-		PCintPort::detachInterrupt(MP3_DREQINT);
+		PCintPort::detachInterrupt(MP3_DREQ);
 
 }
 
@@ -294,7 +294,7 @@ void SFEMP3Shield::resumeDataStream(){
 		refill();
 
 		//attach refill interrupt off DREQ line, pin 2
-		PCintPort::attachInterrupt(MP3_DREQINT, refill, RISING); 
+		PCintPort::attachInterrupt(MP3_DREQ, &refill, RISING); 
 	}
 
 }
@@ -305,7 +305,7 @@ bool SFEMP3Shield::skipTo(uint32_t timecode){
 	if(playing) {
 	
 		//stop interupt for now
-		PCintPort::detachInterrupt(MP3_DREQINT);
+		PCintPort::detachInterrupt(MP3_DREQ);
 		playing=FALSE;
 		
 		//seek to new position in file
@@ -332,7 +332,7 @@ bool SFEMP3Shield::skipTo(uint32_t timecode){
 		SFEMP3Shield::SetVolume(VolL,VolR);
 		  
 		//attach refill interrupt off DREQ line, pin 2
-		PCintPort::attachInterrupt(MP3_DREQINT, refill, RISING); 
+		PCintPort::attachInterrupt(MP3_DREQ, &refill, RISING); 
 		playing=TRUE;
 		
 		return 0;
@@ -364,7 +364,7 @@ void Mp3WriteRegister(uint8_t addressbyte, uint8_t highbyte, uint8_t lowbyte) {
 
 	//cancel interrupt if playing
 	if(playing)
-		PCintPort::detachInterrupt(MP3_DREQINT);
+		PCintPort::detachInterrupt(MP3_DREQ);
 	
 	//Wait for DREQ to go high indicating IC is available
 	while(!digitalRead(MP3_DREQ)) ; 
@@ -385,7 +385,7 @@ void Mp3WriteRegister(uint8_t addressbyte, uint8_t highbyte, uint8_t lowbyte) {
 		refill();
 
 		//attach refill interrupt off DREQ line, pin 2
-		PCintPort::attachInterrupt(MP3_DREQINT, refill, RISING); 
+		PCintPort::attachInterrupt(MP3_DREQ, &refill, RISING); 
 	}
 	
 }
@@ -395,7 +395,7 @@ unsigned int Mp3ReadRegister (unsigned char addressbyte){
   
 	//cancel interrupt if playing
 	if(playing)
-		PCintPort::detachInterrupt(MP3_DREQINT);
+		PCintPort::detachInterrupt(MP3_DREQ);
 	  
 	while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating IC is available
 	digitalWrite(MP3_XCS, LOW); //Select control
@@ -421,7 +421,7 @@ unsigned int Mp3ReadRegister (unsigned char addressbyte){
 		refill();
 
 		//attach refill interrupt off DREQ line, pin 2
-		PCintPort::attachInterrupt(MP3_DREQINT, refill, RISING); 
+		PCintPort::attachInterrupt(MP3_DREQ, &refill, RISING); 
 	}
 }
 
@@ -438,7 +438,7 @@ static void refill() {
 			playing=FALSE;
 			
 			//cancel external interrupt
-			PCintPort::detachInterrupt(MP3_DREQINT);
+			PCintPort::detachInterrupt(MP3_DREQ);
 			
 			//tell MP3 chip to do a soft reset. Fixes garbles at end, and clears its buffer. 
 			//easier then the way your SUPPOSE to do it by the manual, same result as much as I can tell.
