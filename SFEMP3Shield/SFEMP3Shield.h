@@ -39,7 +39,9 @@ GNU General Public License for more details.
 //Add the SdFat Libraries
 #include <SdFat.h>
 #include <SdFatUtil.h> 
-
+#include <Sd2Card.h>
+#include <SoftSPI.h>
+#include <DigitalPin.h>
 
 
 static void refill();
@@ -159,4 +161,8 @@ union twobyte {
 	uint8_t  byte[2];
 } ;	
 
+static void spiBegin();
+static uint8_t spiRec();
+static void spiSend(uint8_t);
+static void spiInit(uint8_t);
 #endif

@@ -21,6 +21,11 @@
 //Add the SdFat Libraries
 #include <SdFat.h>
 #include <SdFatUtil.h> 
+#include <Sd2Card.h>
+#include <SoftSPI.h>
+#include <DigitalPin.h>
+#include <MemoryFree.h>
+#include <pgmStrToRAM.h>
 
 //and the MP3 Shield Library
 #include <SFEMP3Shield.h>
@@ -39,6 +44,8 @@ char album[30];
 void setup() {
 
   Serial.begin(115200);
+	Serial.print(getPSTR("Free RAM = "));
+	Serial.println(freeMemory(), DEC);
   
   //boot up the MP3 Player Shield
   result = MP3player.begin();
@@ -49,7 +56,6 @@ void setup() {
     Serial.println(" when trying to start MP3 player");
     }
 
-  Serial.println("Hello");
   Serial.println("Send a number 1-9 to play a track or s to stop playing");
   
 }

@@ -3,6 +3,9 @@
 #include "SPI.h"
 //avr pgmspace library for storing the LUT in program flash instead of sram
 #include <avr/pgmspace.h>
+#include <Sd2Card.h>
+#include <SoftSPI.h>
+#include <DigitalPin.h>
 
 //bitrate lookup table      V1,L1  V1,L2   V1,L3   V2,L1  V2,L2+L3
 //168 bytes(!!); better to store in progmem or eeprom
@@ -29,6 +32,7 @@ uint8_t playing;
 
 //buffer for music
 uint8_t mp3DataBuffer[32];
+static SoftSPI<SOFT_SPI_MISO_PIN, SOFT_SPI_MOSI_PIN, SOFT_SPI_SCK_PIN, 0> softSpiBus2;
 
 //Inits everything
 uint8_t SFEMP3Shield::begin(){
@@ -41,6 +45,8 @@ uint8_t SFEMP3Shield::begin(){
   digitalWrite(MP3_XCS, HIGH); //Deselect Control
   digitalWrite(MP3_XDCS, HIGH); //Deselect Data
   digitalWrite(MP3_RESET, LOW); //Put VS1053 into hardware reset
+  //spiBegin();
+  
   
   //Setup SD card interface
   //Pin 10 must be set as an output for the SD communication to work.
@@ -58,23 +64,28 @@ uint8_t SFEMP3Shield::begin(){
   //From page 12 of datasheet, max SCI reads are CLKI/7. Input clock is 12.288MHz. 
   //Internal clock multiplier is 1.0x after power up. 
   //Therefore, max SPI speed is 1.75MHz. We will use 1MHz to be safe.
-  SPI.setClockDivider(SPI_CLOCK_DIV16); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
-  SPI.transfer(0xFF); //Throw a dummy byte at the bus
+
+//root.ls(LS_R | LS_DATE | LS_SIZE);
+//return 9;
+
+//  int xyz = spiRec();
+  //SPI.setClockDivider(SPI_CLOCK_DIV16); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
+#ifndef SOFTWARE_SPI
+  spiInit(SPI_SD_INIT_RATE);
+#endif  // SOFTWARE_SPI
+  spiRec(); //SPI.transfer(0xFF); //Throw a dummy byte at the bus
+  
   //Initialize VS1053 chip 
   delay(10);
   digitalWrite(MP3_RESET, HIGH); //Bring up VS1053
   
-  SFEMP3Shield::SetVolume(40, 40);
-  VolL = 40;
-  VolR = 40;
-  
    //Let's check the status of the VS1053
   int MP3Mode = Mp3ReadRegister(SCI_MODE);
   //int MP3Clock = Mp3ReadRegister(SCI_CLOCKF);
-/*
+
   Serial.print("SCI_Mode (0x4800) = 0x");
   Serial.println(MP3Mode, HEX);
-
+/*
   Serial.print("SCI_Status (0x48) = 0x");
   Serial.println(MP3Status, HEX);
 
@@ -91,14 +102,23 @@ uint8_t SFEMP3Shield::begin(){
   //From page 12 of datasheet, max SCI reads are CLKI/7. Input clock is 12.288MHz. 
   //Internal clock multiplier is now 3x.
   //Therefore, max SPI speed is 5MHz. 4MHz will be safe.
+#ifndef SOFTWARE_SPI
   SPI.setClockDivider(SPI_CLOCK_DIV4); //Set SPI bus speed to 4MHz (16MHz / 4 = 4MHz)
+#endif  // SOFTWARE_SPI
   
   //test reading after data rate change
   int MP3Clock = Mp3ReadRegister(SCI_CLOCKF);
+  Serial.print("SCI_ClockF = 0x");
+  Serial.println(MP3Clock, HEX);
   if(MP3Clock != 0x6000) return 5;
-  
+  Serial.print("loading Patch ");
   if (VSLoadUserCode("patches.053")) Serial.println("Warning: patch file not found, skipping.");
+  Serial.print("Patch Loaded");
   
+  SFEMP3Shield::SetVolume(40, 40);
+  VolL = 40;
+  VolR = 40;
+  Serial.print("Vol and returning");
   return 0;
 }
 
@@ -361,10 +381,10 @@ void Mp3WriteRegister(uint8_t addressbyte, uint8_t highbyte, uint8_t lowbyte) {
 	digitalWrite(MP3_XCS, LOW); 
 
 	//SCI consists of instruction byte, address byte, and 16-bit data word.
-	SPI.transfer(0x02); //Write instruction
-	SPI.transfer(addressbyte);
-	SPI.transfer(highbyte);
-	SPI.transfer(lowbyte);
+	spiSend(0x02); //SPI.transfer(0x02); //Write instruction
+	spiSend(addressbyte); //SPI.transfer(addressbyte);
+	spiSend(highbyte); //SPI.transfer(highbyte);
+	spiSend(lowbyte); //SPI.transfer(lowbyte);
 	while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
 	digitalWrite(MP3_XCS, HIGH); //Deselect Control
 	
@@ -390,12 +410,12 @@ unsigned int Mp3ReadRegister (unsigned char addressbyte){
 	digitalWrite(MP3_XCS, LOW); //Select control
 
 	//SCI consists of instruction byte, address byte, and 16-bit data word.
-	SPI.transfer(0x03);  //Read instruction
-	SPI.transfer(addressbyte);
+	spiSend(0x03); //SPI.transfer(0x03);  //Read instruction
+	spiSend(addressbyte); //SPI.transfer(addressbyte);
 
-	char response1 = SPI.transfer(0xFF); //Read the first byte
+	char response1 = spiRec(); //SPI.transfer(0xFF); //Read the first byte
 	while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
-	char response2 = SPI.transfer(0xFF); //Read the second byte
+	char response2 = spiRec(); //SPI.transfer(0xFF); //Read the second byte
 	while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
 
 	digitalWrite(MP3_XCS, HIGH); //Deselect Control
@@ -463,7 +483,7 @@ static void refill() {
       //Once DREQ is released (high) we now feed 32 bytes of data to the VS1053 from our SD read buffer
       digitalWrite(MP3_XDCS, LOW); //Select Data
       for(int y = 0 ; y < sizeof(mp3DataBuffer) ; y++) {
-        SPI.transfer(mp3DataBuffer[y]); // Send SPI byte
+        spiSend(mp3DataBuffer[y]); //SPI.transfer(mp3DataBuffer[y]); // Send SPI byte
       }
   
       digitalWrite(MP3_XDCS, HIGH); //Deselect Data
@@ -484,7 +504,7 @@ void flush_cancel(flush_m mode) {
 		digitalWrite(MP3_XDCS, LOW); //Select Data
 		for(int y = 0 ; y < 2052 ; y++) {
 			while(!digitalRead(MP3_DREQ)); // wait until DREQ is or goes high
-			SPI.transfer(endFillByte); // Send SPI byte
+			spiSend(endFillByte); //SPI.transfer(endFillByte); // Send SPI byte
 		}
 		digitalWrite(MP3_XDCS, HIGH); //Deselect Data
 	}
@@ -495,7 +515,7 @@ void flush_cancel(flush_m mode) {
 		digitalWrite(MP3_XDCS, LOW); //Select Data
 		for(int y = 0 ; y < 32 ; y++) {
 			while(!digitalRead(MP3_DREQ)); // wait until DREQ is or goes high
-			SPI.transfer(endFillByte); // Send SPI byte
+			spiSend(endFillByte); //SPI.transfer(endFillByte); // Send SPI byte
 		}
 		digitalWrite(MP3_XDCS, HIGH); //Deselect Data
 		
@@ -506,7 +526,7 @@ void flush_cancel(flush_m mode) {
 				digitalWrite(MP3_XDCS, LOW); //Select Data
 				for(int y = 0 ; y < 2052 ; y++) {
 					while(!digitalRead(MP3_DREQ)); // wait until DREQ is or goes high
-					SPI.transfer(endFillByte); // Send SPI byte
+					spiSend(endFillByte); //SPI.transfer(endFillByte); // Send SPI byte
 				}
 				digitalWrite(MP3_XDCS, HIGH); //Deselect Data
 			}
@@ -552,20 +572,24 @@ uint8_t SFEMP3Shield::VSLoadUserCode(char* fileName){
   while (1) {
     //addr = Plugin[i++];
     if (!track.read(addr.byte, 2)) break;
+    	Serial.println(addr.word, HEX);
     //n = Plugin[i++];
     if (!track.read(n.byte, 2)) break;
+    	Serial.println(n.word, HEX);
     if (n.word & 0x8000U) { /* RLE run, replicate n samples */
       n.word &= 0x7FFF;
       //val = Plugin[i++];
 	    if (!track.read(val.byte, 2)) break;
-      while (n.word--) {
-        Mp3WriteRegister(addr.word, val.word);
-      }
+	    Serial.println(val.word, HEX);
+//      while (n.word--) {
+//        Mp3WriteRegister(addr.word, val.word);
+//      }
     } else {           /* Copy run, copy n samples */
       while (n.word--) {
         //val = Plugin[i++];
 				if (!track.read(val.byte, 2)) 	break;
-        Mp3WriteRegister(addr.word, val.word);
+				Serial.println(val.word, HEX);
+//        Mp3WriteRegister(addr.word, val.word);
       }
     }
   }
@@ -573,3 +597,41 @@ uint8_t SFEMP3Shield::VSLoadUserCode(char* fileName){
 //	playing=FALSE;
 	return 0;
 }
+
+#ifndef SOFTWARE_SPI
+static void spiBegin() {
+  pinMode(MISO, INPUT);
+  pinMode(MOSI, OUTPUT);
+  pinMode(SCK, OUTPUT);
+  // SS must be in output mode even it is not chip select
+  pinMode(SS, OUTPUT);
+  // set SS high - may be chip select for another SPI device
+#if SET_SPI_SS_HIGH
+  digitalWrite(SS, HIGH);
+#endif  // SET_SPI_SS_HIGH
+}
+static void spiInit(uint8_t spiRate) {
+  // See avr processor documentation
+  SPCR = (1 << SPE) | (1 << MSTR) | (spiRate >> 1);
+  SPSR = spiRate & 1 || spiRate == 6 ? 0 : 1 << SPI2X;
+}
+static uint8_t spiRec() {
+  SPDR = 0XFF;
+  while (!(SPSR & (1 << SPIF)));
+  return SPDR;
+}
+static void spiSend(uint8_t b) {
+  SPDR = b;
+  while (!(SPSR & (1 << SPIF)));
+}
+#else  // SOFTWARE_SPI
+static void spiBegin() {
+  softSpiBus2.begin();
+}
+static uint8_t spiRec() {
+  return softSpiBus2.receive();
+}
+static void spiSend(uint8_t data) {
+  softSpiBus2.send(data);
+}
+#endif  // SOFTWARE_SPI
