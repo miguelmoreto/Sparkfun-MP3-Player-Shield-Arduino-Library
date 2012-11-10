@@ -161,8 +161,7 @@ union twobyte {
 	uint8_t  byte[2];
 } ;	
 
-static void spiBegin();
-static uint8_t spiRec();
-static void spiSend(uint8_t);
-static void spiInit(uint8_t);
+static void spiBeginMP3();
+static void spiInitMP3(uint8_t);
+static uint8_t spitransferMP3(uint8_t);
 #endif
